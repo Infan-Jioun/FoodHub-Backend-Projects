@@ -11,7 +11,13 @@ const { default: axios } = require('axios');
 const emailjs = require('emailjs-com');
 // MIDDLEWERE
 app.use(express.json())
-app.use(cors());
+app.use(cors({
+    origin: [
+        'http://localhost:5173',
+        'https://foodhub-d3e1e.web.app',
+        'https://foodhub-d3e1e.firebaseapp.com'
+    ]
+}));
 app.use(express.urlencoded());
 
 
@@ -1396,3 +1402,8 @@ app.get("/", (req, res) => {
 app.listen(port, () => {
     console.log(`Signnel crud server ${port}`);
 })
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(port, () => {
+        console.log(`FoodHub server is running on port ${port}`);
+    });
+}
