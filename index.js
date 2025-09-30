@@ -1,0 +1,1398 @@
+const express = require('express');
+const cors = require('cors');
+const app = express();
+const bodyParser = require('body-parser');
+require("dotenv").config();
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const port = process.env.PORT || 5000;
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const jwt = require("jsonwebtoken");
+const { default: axios } = require('axios');
+const emailjs = require('emailjs-com');
+// MIDDLEWERE
+app.use(express.json())
+app.use(cors());
+app.use(express.urlencoded());
+
+
+const uri = `mongodb+srv://${process.env.DBNAME}:${process.env.DBPASS}@cluster0.lopynog.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+
+
+const client = new MongoClient(uri, {
+    serverApi: {
+        version: ServerApiVersion.v1,
+        strict: true,
+        deprecationErrors: true,
+    }
+});
+
+async function run() {
+    try {
+
+
+        const usersCollection = client.db("FOODHUB").collection("users");
+        const restaurantUploadCollection = client.db("FOODHUB").collection("restaurantUpload");
+        // const foodsCollection = client.db("FOODHUB").collection("foods");
+        const addFoodCollection = client.db("FOODHUB").collection("addFood");
+        const paymentCollection = client.db("FOODHUB").collection("payment");
+        const districtCollection = client.db("FOODHUB").collection("districtAvailable");
+        const reviewCollection = client.db("FOODHUB").collection("reviewAvailable");
+        const websiteReviewCollection = client.db('FOODHUB').collection('websiteReviews');
+        const wishlistCollection = client.db('FOODHUB').collection('wishlist');
+
+
+        // token create
+        app.post("/jwt", async (req, res) => {
+            const user = req.body;
+            const token = jwt.sign(user, process.env.JWT_WEB_TOKEN, { expiresIn: "1hr" })
+            res.send({ token })
+        });
+        const verifyToken = (req, res, next) => {
+            // console.log("inside verify token ", req.headers.authorization);
+            if (!req.headers.authorization) {
+                return res.status(401).send({ message: "Unauthorized access" })
+            }
+            const token = req.headers.authorization.split(" ")[1];
+            jwt.verify(token, process.env.JWT_WEB_TOKEN, (err, decoded) => {
+                if (err) {
+                    return res.status(403).send({ message: "forbiidden access" })
+                }
+                req.decoded = decoded;
+                next();
+            })
+        }
+        // verify admin  ,  verifyModerator , verifyOwner
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email: email };
+            const user = await usersCollection.findOne(query);
+            const isAdmin = user?.role === "admin";
+            if (!isAdmin) {
+                return res.status(403).send({ message: "forbidden access" })
+            }
+            next();
+        }
+        const verifyModerator = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email: email };
+            const user = await usersCollection.findOne(query);
+            const isModerator = user?.role === "moderator";
+            if (!isModerator) {
+                return res.status(403).send({ message: "forbidden access" })
+            }
+            next();
+        }
+        const verifyOwner = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email };
+            const user = await usersCollection.findOne(query);
+            const isOwner = user?.role === "owner";
+            if (!isOwner) {
+                return res.status(403).send({ message: "forbidden access" });
+            }
+            next();
+        };
+
+        const verifyRole = (role) => {
+            return async (req, res, next) => {
+                const email = req.decoded.email;
+                const user = await usersCollection.findOne({ email });
+                if (!user || user.role !== role) {
+                    return res.status(403).send({ message: "forbidden access" });
+                }
+                next();
+            };
+        };
+        // users routes
+        app.get("/users", verifyToken, async (req, res) => {
+            const result = await usersCollection.find().toArray();
+            res.send(result)
+        })
+        app.get('/users/check-name', async (req, res) => {
+            try {
+                const { name } = req.query;
+                if (!name) {
+                    return res.status(400).json({ error: "Name parameter is required." });
+                }
+
+                const existingUser = await usersCollection.findOne({ name: name.trim() });
+
+                res.json({ exists: !!existingUser });
+            } catch (error) {
+                console.error("Error checking name:", error);
+                res.status(500).json({ error: "Internal server error." });
+            }
+        });
+
+        app.put("/users", async (req, res) => {
+            const user = req.body;
+            const query = { email: user?.email };
+            const isExists = await usersCollection.findOne(query);
+
+            const options = { upsert: true };
+            const updateDoc = {
+                $set: {
+                    ...user,
+                    isNew: user.restaurantAdddress && user.restaurantNumber ? true : false,
+                    timestemp: Date.now(),
+                }
+            };
+
+            const result = await usersCollection.updateOne(query, updateDoc, options);
+            res.send(result);
+        });
+
+        app.delete("/users/:id", verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await usersCollection.deleteOne(query);
+            console.log(result);
+            res.send(result)
+        })
+        app.patch('/users/user/:id', verifyToken, async (req, res) => {
+            const id = req.params.id;
+            try {
+                const result = await usersCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    { $set: { role: 'user' } }
+                );
+                res.send(result);
+            } catch (err) {
+                res.status(500).send({ error: 'Failed to update to user', details: err });
+            }
+        });
+        // admin routes
+
+        app.get("/users/admin/:email", verifyToken, verifyAdmin, async (req, res) => {
+            const email = req.params.email;
+            if (email !== req.decoded.email) {
+                return res.status(403).send({ message: "forbidden access" });
+            }
+            const query = { email: email };
+            const user = await usersCollection.findOne(query);
+            let admin = false
+            if (user) {
+                admin = user?.role === "admin"
+            }
+            res.send({ admin })
+        });
+        app.patch("/users/admin/:id", verifyToken, verifyRole("admin"), async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            const filter = { _id: new ObjectId(id) }
+            console.log(filter);
+            const updateDoc = {
+                $set: {
+                    role: "admin"
+                }
+            }
+            const result = await usersCollection.updateOne(filter, updateDoc)
+            console.log(result);
+            res.send(result)
+
+        })
+
+
+        app.get("/revenue-summary", async (req, res) => {
+            try {
+                const payments = await paymentCollection.find({}).toArray();
+
+                let totalRevenue = 0;
+                let totalCommission = 0;
+                let restaurantRevenue = 0;
+
+                payments.forEach(payment => {
+
+                    const amount = typeof payment.foodPrice === 'string'
+                        ? parseFloat(payment.foodPrice.replace(/[^0-9.-]/g, ''))
+                        : Number(payment.foodPrice) || 0;
+
+                    totalRevenue += amount;
+                    const commission = amount * 0.05;
+                    totalCommission += commission;
+                    restaurantRevenue += (amount - commission);
+                });
+
+                res.send({
+                    totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+                    totalOrders: payments.length,
+                    totalCommission: parseFloat(totalCommission.toFixed(2)),
+                    restaurantRevenue: parseFloat(restaurantRevenue.toFixed(2)),
+                    averageOrder: payments.length > 0 ? parseFloat((totalRevenue / payments.length).toFixed(2)) : 0
+                });
+            } catch (error) {
+                console.error("Error in /revenue-summary:", error);
+                res.status(500).send({ error: "Server error" });
+            }
+        });
+
+        app.get("/revenue-by-month", async (req, res) => {
+            try {
+                const payments = await paymentCollection.find({}).toArray();
+                const monthly = {};
+
+                payments.forEach(payment => {
+                    const date = new Date(payment.date);
+                    const month = date.toLocaleString("default", { month: "short", year: "numeric" });
+
+                    if (!monthly[month]) {
+                        monthly[month] = {
+                            revenue: 0,
+                            commission: 0,
+                            restaurantRevenue: 0
+                        };
+                    }
+
+                    const amount = parseFloat(payment.foodPrice);
+                    const commission = amount * 0.05;
+
+                    monthly[month].revenue += amount;
+                    monthly[month].commission += commission;
+                    monthly[month].restaurantRevenue += (amount - commission);
+                });
+
+                const result = Object.entries(monthly).map(([month, data]) => ({
+                    month,
+                    revenue: parseFloat(data.revenue.toFixed(2)),
+                    commission: parseFloat(data.commission.toFixed(2)),
+                    restaurantRevenue: parseFloat(data.restaurantRevenue.toFixed(2))
+                }));
+
+                res.send(result);
+            } catch (error) {
+                console.error("Error in /revenue-by-month:", error);
+                res.status(500).send({ error: "Server error" });
+            }
+        });
+
+        app.get("/daily-revenue", async (req, res) => {
+            try {
+                const payments = await paymentCollection.find({}).toArray();
+                const daily = {};
+
+                payments.forEach(payment => {
+                    const date = new Date(payment.date).toISOString().split("T")[0];
+                    const amount = parseFloat(payment.foodPrice);
+                    const commission = amount * 0.05;
+
+                    if (!daily[date]) {
+                        daily[date] = {
+                            revenue: 0,
+                            commission: 0,
+                            restaurantRevenue: 0
+                        };
+                    }
+
+                    daily[date].revenue += amount;
+                    daily[date].commission += commission;
+                    daily[date].restaurantRevenue += (amount - commission);
+                });
+
+                const last7Days = Object.entries(daily)
+                    .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+                    .slice(0, 7)
+                    .reverse()
+                    .map(([date, data]) => ({
+                        date,
+                        revenue: parseFloat(data.revenue.toFixed(2)),
+                        commission: parseFloat(data.commission.toFixed(2)),
+                        restaurantRevenue: parseFloat(data.restaurantRevenue.toFixed(2))
+                    }));
+
+                res.send(last7Days);
+            } catch (error) {
+                console.error("Error in /daily-revenue:", error);
+                res.status(500).send({ error: "Server error" });
+            }
+        });
+
+        app.get("/top-items", async (req, res) => {
+            try {
+                const payments = await paymentCollection.find({}).toArray();
+                const itemMap = {};
+
+                payments.forEach(payment => {
+                    if (Array.isArray(payment.items)) {
+                        payment.items.forEach(item => {
+                            const key = item.foodName;
+
+                            if (!itemMap[key]) {
+                                itemMap[key] = {
+                                    foodName: item.foodName,
+                                    quantity: 0,
+                                    totalRevenue: 0,
+                                    restaurantRevenue: 0,
+                                    platformCommission: 0,
+                                    restaurantName: item.restaurantName
+                                };
+                            }
+
+                            const itemTotal = parseFloat(item.price) * parseInt(item.quantity);
+                            const commission = itemTotal * 0.05;
+
+                            itemMap[key].quantity += parseInt(item.quantity);
+                            itemMap[key].totalRevenue += itemTotal;
+                            itemMap[key].platformCommission += commission;
+                            itemMap[key].restaurantRevenue += (itemTotal - commission);
+                        });
+                    }
+                });
+
+                const result = Object.values(itemMap)
+                    .sort((a, b) => b.quantity - a.quantity)
+                    .slice(0, 6);
+
+                res.send(result);
+            } catch (error) {
+                console.error("Error in /top-items:", error);
+                res.status(500).send({ error: "Server error" });
+            }
+        });
+
+        // end user and admin routes
+
+        // moderator routes
+
+        app.get("/users/moderator/:email", verifyToken, verifyModerator, async (req, res) => {
+            const email = req.params.email;
+            if (email !== req.decoded.email) {
+                return res.status(403).send({ message: "forbidden access" });
+            }
+            const query = { email: email };
+            const user = await usersCollection.findOne(query);
+            if (user?.role === "moderator") {
+                return res.send({ moderator: true });
+            }
+            res.send({ moderator: false });
+        });
+        app.patch("/users/moderator/:id", verifyToken, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            const filter = { _id: new ObjectId(id) }
+            console.log(filter);
+            const updateDoc = {
+                $set: {
+                    role: "moderator"
+                }
+            }
+            const result = await usersCollection.updateOne(filter, updateDoc)
+            console.log(result);
+            res.send(result)
+        })
+        // Restaurant owner dashboard routes
+
+        app.get("/users/restaurantOwner/:email", verifyToken, async (req, res) => {
+            const email = req.params.email;
+            if (email !== req.decoded.email) {
+                return res.status(403).send({ message: "forbidden access" });
+            }
+            const query = { email: email };
+            const user = await usersCollection.findOne(query);
+            let owner = false;
+            if (user) {
+                owner = user.role === "owner";
+            }
+            res.send({ owner });
+        });
+
+        app.patch("/users/restaurantOwner/:id", verifyToken, async (req, res) => {
+            const id = req.params.id;
+            console.log("owner id", id);
+            const filter = { _id: new ObjectId(id) }
+            console.log("owner ", filter);
+            const updateDoc = {
+                $set: {
+                    role: "owner"
+                }
+            }
+            const result = await usersCollection.updateOne(filter, updateDoc)
+            console.log("owner result", result);
+            res.send(result)
+        })
+
+
+        app.get('/restaurantManage/:email', async (req, res) => {
+            try {
+                const email = req.params.email;
+                if (!email) return res.status(400).json({ message: 'Email is required' });
+
+                const restaurant = await restaurantUploadCollection.findOne({ email });
+
+                if (!restaurant) {
+                    return res.status(404).json({ message: 'Restaurant not found' });
+                }
+
+                res.status(200).json(restaurant);
+            } catch (error) {
+                console.error('Error fetching restaurant:', error);
+                res.status(500).json({ message: 'Internal server error' });
+            }
+        });
+        app.put("/restaurantManage/:restaurantName/:foodName/update", async (req, res) => {
+            try {
+                const { restaurantName, foodName } = req.params;
+                const updateData = req.body;
+
+                if (!updateData) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Invalid update data",
+                        type: "VALIDATION_ERROR",
+                    });
+                }
+
+                const result = await restaurantUploadCollection.updateOne(
+                    {
+                        restaurantName,
+                        "foods.foodName": foodName
+                    },
+                    {
+                        $set: {
+                            "foods.$.foodName": updateData.foodName,
+                            "foods.$.foodImage": updateData.foodImage,
+                            "foods.$.category": updateData.category,
+                            "foods.$.price": updateData.price,
+                            "foods.$.description": updateData.description || "",
+                            "foods.$.updatedAt": new Date()
+                        }
+                    }
+                );
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Food item not found",
+                        type: "FOOD_NOT_FOUND"
+                    });
+                }
+
+                res.json({
+                    success: true,
+                    message: "Food item updated successfully",
+                    modifiedCount: result.modifiedCount,
+                });
+            } catch (error) {
+                console.error("Error updating food:", error);
+                res.status(500).json({
+                    success: false,
+                    message: "Internal server error",
+                    type: "SERVER_ERROR",
+                });
+            }
+        });
+
+        app.delete("/restaurantManage/:restaurantName/:foodName", async (req, res) => {
+            const { restaurantName, foodName } = req.params;
+
+            const filter = { restaurantName: restaurantName };
+            const update = { $pull: { foods: { foodName: foodName } } };
+
+            const result = await restaurantUploadCollection.updateOne(filter, update);
+
+            if (result.modifiedCount > 0) {
+                res.send({ success: true, message: "Food item deleted successfully" });
+            } else {
+                res.status(404).send({ success: false, message: "Food not found" });
+            }
+        });
+
+        app.get('/restaurantPayments/:email', verifyToken, verifyOwner, async (req, res) => {
+            try {
+                const email = req.params.email;
+
+                // First find the restaurant owned by this email
+                const restaurant = await restaurantUploadCollection.findOne({ email });
+
+                if (!restaurant) {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'Restaurant not found for this owner'
+                    });
+                }
+
+                // Find all payments where items contain this restaurant's name
+                const payments = await paymentCollection.find({
+                    'items.restaurantName': restaurant.restaurantName,
+                    status: 'success'
+                }).sort({ date: -1 }).toArray();
+
+
+                const totals = payments.reduce((acc, payment) => {
+                    const restaurantItems = payment.items.filter(
+                        item => item.restaurantName === restaurant.restaurantName
+                    );
+
+                    const paymentTotal = restaurantItems.reduce(
+                        (sum, item) => sum + (parseFloat(item.price) * parseInt(item.quantity || 1)),
+                        0
+                    );
+
+                    const commission = paymentTotal * 0.05;
+                    const earnings = paymentTotal - commission;
+
+                    return {
+                        totalSales: acc.totalSales + paymentTotal,
+                        totalCommission: acc.totalCommission + commission,
+                        totalEarnings: acc.totalEarnings + earnings
+                    };
+                }, { totalSales: 0, totalCommission: 0, totalEarnings: 0 });
+
+                res.status(200).json({
+                    success: true,
+                    data: payments,
+                    totals
+                });
+
+            } catch (error) {
+                console.error('Error fetching restaurant payments:', error);
+                res.status(500).json({
+                    success: false,
+                    message: 'Server error while fetching payments'
+                });
+            }
+        });
+
+        app.get('/restaurantRevenue/:email', verifyToken, verifyOwner, async (req, res) => {
+            try {
+                const email = req.params.email;
+
+                // First find the restaurant owned by this email
+                const restaurant = await restaurantUploadCollection.findOne({ email });
+
+                if (!restaurant) {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'Restaurant not found for this owner'
+                    });
+                }
+
+                // Find all successful payments for this restaurant
+                const payments = await paymentCollection.find({
+                    'items.restaurantName': restaurant.restaurantName,
+                    status: 'success'
+                }).toArray();
+
+                if (!payments || payments.length === 0) {
+                    return res.status(200).json({
+                        success: true,
+                        todayEarnings: 0,
+                        monthlyEarnings: 0,
+                        totalBalance: 0,
+                        lastPayoutDate: null
+                    });
+                }
+
+                // Calculate today's earnings
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                const todayEarnings = payments
+                    .filter(p => new Date(p.date) >= today)
+                    .reduce((sum, payment) => {
+                        const restaurantItems = payment.items.filter(
+                            item => item.restaurantName === restaurant.restaurantName
+                        );
+                        const paymentTotal = restaurantItems.reduce(
+                            (sum, item) => sum + (parseFloat(item.price || 0) * parseInt(item.quantity?.$numberInt || item.quantity || 1)),
+                            0
+                        );
+                        return sum + (paymentTotal * 0.95); // After 5% commission
+                    }, 0);
+
+                // Calculate monthly earnings
+                const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+                const monthlyEarnings = payments
+                    .filter(p => new Date(p.date) >= firstDayOfMonth)
+                    .reduce((sum, payment) => {
+                        const restaurantItems = payment.items.filter(
+                            item => item.restaurantName === restaurant.restaurantName
+                        );
+                        const paymentTotal = restaurantItems.reduce(
+                            (sum, item) => sum + (parseFloat(item.price || 0) * parseInt(item.quantity?.$numberInt || item.quantity || 1)),
+                            0
+                        );
+                        return sum + (paymentTotal * 0.95); // After 5% commission
+                    }, 0);
+
+                // Calculate total balance (all time earnings)
+                const totalBalance = payments.reduce((sum, payment) => {
+                    const restaurantItems = payment.items.filter(
+                        item => item.restaurantName === restaurant.restaurantName
+                    );
+                    const paymentTotal = restaurantItems.reduce(
+                        (sum, item) => sum + (parseFloat(item.price || 0) * parseInt(item.quantity?.$numberInt || item.quantity || 1)),
+                        0
+                    );
+                    return sum + (paymentTotal * 0.95); // After 5% commission
+                }, 0);
+
+                // Find last payout date if available
+                const lastPayout = await paymentCollection.findOne({
+                    'items.restaurantName': restaurant.restaurantName,
+                    status: 'payout'
+                }, { sort: { date: -1 } });
+
+                res.status(200).json({
+                    success: true,
+                    todayEarnings,
+                    monthlyEarnings,
+                    totalBalance,
+                    lastPayoutDate: lastPayout?.date
+                });
+
+            } catch (error) {
+                console.error('Error fetching restaurant revenue:', error);
+                res.status(500).json({
+                    success: false,
+                    message: 'Server error while fetching revenue data'
+                });
+            }
+        });
+        app.get('/orders', async (req, res) => {
+            try {
+                const restaurantName = req.query.restaurantName;
+
+                if (!restaurantName) {
+                    return res.status(400).json({ message: 'Restaurant name is required' });
+                }
+
+                const orders = await paymentCollection.find({
+                    'items.restaurantName': restaurantName
+                }).toArray();
+
+                res.status(200).json(orders);
+            } catch (error) {
+                console.error('Error fetching orders:', error);
+                res.status(500).json({ message: 'Internal Server Error' });
+            }
+        });
+        app.get('/website-reviews', async (req, res) => {
+            try {
+                const reviews = await websiteReviewCollection.find({}).sort({ date: -1 }).toArray();
+                res.send({ success: true, reviews });
+            } catch (err) {
+                res.status(500).send({ success: false, message: err.message });
+            }
+        });
+
+        // POST /website-review
+        app.post('/website-review', async (req, res) => {
+            const { email, name, photoURL, rating, comment, date } = req.body;
+
+            if (!email || !rating || !comment) {
+                return res.status(400).send({ success: false, message: 'Missing fields' });
+            }
+
+            try {
+
+                const existing = await websiteReviewCollection.findOne({ email });
+                if (existing) {
+                    return res.status(400).send({ success: false, message: 'You have already reviewed' });
+                }
+
+                const result = await websiteReviewCollection.insertOne({ email, name, photoURL, rating, comment, date });
+                res.send({ success: true, message: 'Review submitted', reviewId: result.insertedId });
+            } catch (err) {
+                res.status(500).send({ success: false, message: err.message });
+            }
+        });
+
+        // Restaurant Routes
+        app.get("/restaurantUpload", async (req, res) => {
+            const { email, restaurantName } = req.query;
+
+            if (email && restaurantName) {
+                try {
+                    const exists = await restaurantUploadCollection.findOne({ email, restaurantName });
+                    return res.send({ exists: !!exists });
+                } catch (error) {
+                    return res.status(500).send({ message: "Error checking restaurant", error });
+                }
+            }
+
+            try {
+                const result = await restaurantUploadCollection.find().toArray();
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: "Error retrieving restaurants", error });
+            }
+        });
+
+        app.post("/restaurantUpload", verifyToken, async (req, res) => {
+            const addFood = req.body;
+            const { email, restaurantName } = addFood;
+            const existing = await restaurantUploadCollection.findOne({ email, restaurantName });
+            if (existing) {
+                return res.status(409).send({ message: "Restaurant already exists for this user." });
+            }
+
+            const result = await restaurantUploadCollection.insertOne(addFood);
+            res.send(result);
+        });
+        app.get("/restaurantUpload/:restaurantName", async (req, res) => {
+            const restaurantName = req.params.restaurantName;
+            const query = { restaurantName: restaurantName };
+            const result = await restaurantUploadCollection.findOne(query);
+            res.send(result)
+        })
+
+        app.get("/restaurantUpload/:restaurantName", async (req, res) => {
+            const restaurantName = req.params.restaurantName;
+            const query = { restaurantName: restaurantName };
+            const result = await restaurantUploadCollection.findOne(query);
+            res.send(result);
+        });
+        app.patch('/restaurant-review/:restaurantName', async (req, res) => {
+            const { restaurantName } = req.params;
+            const { email, name, rating, comment, date, userImage } = req.body;
+
+            try {
+                const filter = { restaurantName };
+                const restaurant = await restaurantUploadCollection.findOne(filter);
+
+                if (!restaurant) {
+                    return res.status(404).send({ success: false, message: 'Restaurant not found' });
+                }
+
+                // Already reviewed check
+                const alreadyReviewed = restaurant.reviews?.some(
+                    (review) => review.email === email
+                );
+
+                if (alreadyReviewed) {
+                    return res.status(400).send({ success: false, message: 'Already reviewed' });
+                }
+
+                const newReview = {
+                    _id: new ObjectId(),
+                    name,
+                    email,
+                    rating,
+                    comment,
+                    date: new Date(date),
+                    userImage: userImage || null,
+                };
+
+                const updateDoc = { $push: { reviews: newReview } };
+                const result = await restaurantUploadCollection.updateOne(filter, updateDoc);
+
+                res.send({ success: result.modifiedCount > 0, review: newReview });
+            } catch (err) {
+                console.error("PATCH error:", err);
+                res.status(500).send({ success: false, message: 'Server error' });
+            }
+        });
+
+        app.get('/restaurant-review/check', async (req, res) => {
+            const { restaurant, email } = req.query;
+
+            try {
+                const found = await restaurantUploadCollection.findOne({
+                    restaurantName: restaurant,
+                    'reviews.email': email,
+                });
+
+                res.send({ reviewed: !!found });
+            } catch (err) {
+                console.error(err);
+                res.status(500).send({ reviewed: false });
+            }
+        });
+
+        app.get('/restaurant-review', async (req, res) => {
+            const { restaurant } = req.query;
+
+            try {
+                if (!restaurant) {
+                    return res.status(400).send({ success: false, message: 'Restaurant name required' });
+                }
+
+                const found = await restaurantUploadCollection.findOne(
+                    { restaurantName: restaurant },
+                    { projection: { reviews: 1 } }
+                );
+
+                if (!found) {
+                    return res.status(404).send({ success: false, message: 'Restaurant not found' });
+                }
+
+                // Fix nested numeric fields
+                const reviews = (found.reviews || []).map(r => ({
+                    ...r,
+                    rating: r.rating?.$numberInt ? parseInt(r.rating.$numberInt) : r.rating,
+                }));
+
+                res.send(reviews);
+            } catch (err) {
+                console.error('Error fetching reviews:', err);
+                res.status(500).send({ success: false, message: 'Internal Server Error' });
+            }
+        });
+
+
+
+        app.delete("/restaurantUpload/:restaurantName", async (req, res) => {
+            const restaurantName = req.params.restaurantName;
+            const query = { restaurantName: restaurantName }
+            const result = await restaurantUploadCollection.deleteOne(query);
+            res.send(result);
+        })
+        app.get("/restaurantUpload/:districtName", async (req, res) => {
+            const districtName = req.params.districtName;
+            const query = { districtName: districtName };
+            const result = await restaurantUploadCollection.find(query).toArray();
+            console.log(result);
+            res.send(result);
+        })
+        app.get("/restaurantUpload/district/:districtName", async (req, res) => {
+            const districtName = req.params.districtName;
+            const query = { districtName: districtName };
+            const result = await restaurantUploadCollection.find(query).toArray();
+            console.log(result);
+            res.send(result);
+        });
+
+        // Server API Endpoints
+        // PATCH: Add a new food to a restaurant
+        app.patch("/restaurantUpload/:restaurantName", async (req, res) => {
+            const { restaurantName } = req.params;
+            const foodInfo = req.body; // expects: { foodName, foodImage, category, price }
+
+            try {
+                const filter = { restaurantName: decodeURIComponent(restaurantName) };
+                const update = { $push: { foods: foodInfo } };
+
+                const result = await restaurantUploadCollection.updateOne(filter, update);
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).send({
+                        success: false,
+                        message: "Restaurant not found. Please create it first.",
+                    });
+                }
+
+                if (result.modifiedCount > 0) {
+                    return res.send({
+                        success: true,
+                        message: "Food added successfully",
+                    });
+                } else {
+                    return res.status(400).send({
+                        success: false,
+                        message: "Food was not added. Check your data.",
+                    });
+                }
+            } catch (error) {
+                console.error("Error adding food:", error);
+                res.status(500).send({ success: false, message: "Internal Server Error" });
+            }
+        });
+
+        app.patch("/restaurantUpload/:restaurantName/:foodName", async (req, res) => {
+            const { restaurantName, foodName } = req.params;
+            const { reviewData } = req.body;
+
+            try {
+                const filter = { restaurantName: decodeURIComponent(restaurantName) };
+                const restaurantDoc = await restaurantUploadCollection.findOne(filter);
+
+                if (!restaurantDoc) {
+                    return res.status(404).send({ success: false, message: "Restaurant not found" });
+                }
+
+                const targetFood = restaurantDoc.foods.find(
+                    (food) => food.foodName === decodeURIComponent(foodName)
+                );
+
+                if (!targetFood) {
+                    return res.status(404).send({ success: false, message: "Food not found" });
+                }
+
+
+                const alreadyReviewed = targetFood.reviews?.some(
+                    (review) => review.customerEmail === reviewData.customerEmail
+                );
+
+                if (alreadyReviewed) {
+                    return res.status(400).send({ success: false, message: "Already reviewed" });
+                }
+
+
+                reviewData._id = new ObjectId();
+                reviewData.date = new Date();
+
+                const result = await restaurantUploadCollection.updateOne(
+                    {
+                        restaurantName: decodeURIComponent(restaurantName),
+                        "foods.foodName": decodeURIComponent(foodName),
+                    },
+                    { $push: { "foods.$.reviews": reviewData } }
+                );
+
+                res.send({ success: result.modifiedCount > 0 });
+            } catch (error) {
+                console.error("Error adding review:", error);
+                res.status(500).send({ success: false, message: "Internal Server Error" });
+            }
+        });
+
+
+        app.get("/restaurantUpload/:restaurantName/:foodName/reviews", async (req, res) => {
+            const { restaurantName, foodName } = req.params;
+
+            try {
+                const filter = { restaurantName: decodeURIComponent(restaurantName) };
+                const restaurantDoc = await restaurantUploadCollection.findOne(filter);
+
+                if (!restaurantDoc) {
+                    return res.status(404).send({ success: false, message: "Restaurant not found" });
+                }
+
+                const targetFood = restaurantDoc.foods.find(
+                    (food) => food.foodName === decodeURIComponent(foodName)
+                );
+
+                if (!targetFood) {
+                    return res.status(404).send({ success: false, message: "Food not found" });
+                }
+
+                res.send({ success: true, reviews: targetFood.reviews || [] });
+            } catch (error) {
+                console.error("Error fetching reviews:", error);
+                res.status(500).send({ success: false, message: "Internal Server Error" });
+            }
+        });
+
+
+
+        app.patch('/addReplyToReview', async (req, res) => {
+            const { restaurantName, foodName, reviewId, reply } = req.body;
+
+            try {
+                const result = await restaurantUploadCollection.updateOne(
+                    {
+                        restaurantName: restaurantName,
+                        "foods.foodName": foodName,
+                        "foods.reviews._id": new ObjectId(reviewId)
+                    },
+                    {
+                        $set: {
+                            "foods.$[food].reviews.$[review].reply": reply,
+                            "foods.$[food].reviews.$[review].replyDate": new Date()
+                        }
+                    },
+                    {
+                        arrayFilters: [
+                            { "food.foodName": foodName },
+                            { "review._id": new ObjectId(reviewId) }
+                        ]
+                    }
+                );
+
+                res.send({ success: result.modifiedCount > 0 });
+            } catch (error) {
+                console.error('Error adding reply:', error);
+                res.status(500).send({ success: false, error: 'Internal server error' });
+            }
+        });
+        app.get('/getFoodReviews', async (req, res) => {
+            const { restaurantName, foodName } = req.query;
+
+            try {
+                const restaurant = await restaurantUploadCollection.findOne({
+                    restaurantName,
+                    "foods.foodName": foodName
+                });
+
+                if (!restaurant) {
+                    return res.send({ reviews: [] });
+                }
+
+                const foodItem = restaurant.foods.find(f => f.foodName === foodName);
+                res.send({ reviews: foodItem.reviews || [] });
+            } catch (error) {
+                console.error('Error fetching reviews:', error);
+                res.status(500).send({ error: 'Failed to fetch reviews' });
+            }
+        });
+
+        // Wishlist POST
+        // GET wishlist
+        app.get('/wishlist', async (req, res) => {
+            const { email } = req.query;
+            try {
+                const result = await wishlistCollection.find({ email }).toArray();
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: error.message });
+            }
+        });
+
+        // POST wishlist
+        app.post('/wishlist', async (req, res) => {
+            const wishlistItem = req.body;
+            try {
+                const existing = await wishlistCollection.findOne({
+                    foodId: wishlistItem.foodId,
+                    email: wishlistItem.email
+                });
+
+                if (existing) {
+                    return res.status(400).send({ message: 'Item already in wishlist' });
+                }
+
+                const result = await wishlistCollection.insertOne(wishlistItem);
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: error.message });
+            }
+        });
+
+        // DELETE wishlist
+        app.delete('/wishlist/:foodId', async (req, res) => {
+            const { foodId } = req.params;
+            const { email } = req.query;
+
+            try {
+                const result = await wishlistCollection.deleteOne({ foodId, email });
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: error.message });
+            }
+        });
+
+        // SSL Commerce Payment Intent
+        app.post("/create-ssl-payment", async (req, res) => {
+
+            const payment = req.body;
+            console.log("Received Payment Data:", payment);
+
+            const trxid = new ObjectId().toString();
+            payment.transactionId = trxid;
+            const initiatePayment = {
+                store_id: process.env.SSL_COMMERCE_SECRET_ID,
+                store_passwd: process.env.SSL_COMMERCE_SECRET_PASS,
+                total_amount: parseFloat(payment.foodPrice),
+                currency: "BDT",
+                tran_id: trxid,
+                success_url: "https://foodhub-backend.vercel.app/success-payment",
+                fail_url: "http://localhost:5173/dashboard/fail",
+                cancel_url: "http://localhost:5173/dashboard/cancel",
+                ipn_url: "https://foodhub-backend.vercel.app/ipn-success-payment",
+                shipping_method: "Courier",
+                product_name: payment.foodName || "Unknown",
+                product_category: payment.category || "General",
+                product_profile: "general",
+                cus_name: payment.customerName || "Customer",
+                cus_email: payment.email || "customer@example.com",
+                cus_add1: payment.address || "Unknown Address",
+                cus_city: payment.district || "Unknown City",
+                cus_country: "Bangladesh",
+                cus_phone: payment.contactNumber || "01700000000",
+                ship_name: payment.customerName || "Customer",
+                ship_add1: payment.address || "Unknown Address",
+                ship_city: payment.district || "Unknown City",
+                ship_country: "Bangladesh",
+                ship_postcode: '4700'
+            };
+
+            console.log("Sending Payment Request:", initiatePayment);
+
+            const inResponse = await axios.post(
+                "https://sandbox.sslcommerz.com/gwprocess/v4/api.php",
+                new URLSearchParams(initiatePayment).toString(),
+                {
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                }
+            );
+            console.log("isResponse", inResponse);
+            const saveData = await paymentCollection.insertOne(payment)
+            console.log("saveData", saveData);
+            const gatewayPageURL = inResponse?.data?.GatewayPageURL;
+            res.send({ gatewayPageURL })
+
+
+            console.log(gatewayPageURL);
+        });
+
+        emailjs.init(process.env.EMAILJS_PUBLIC_KEY);
+
+        app.post("/success-payment", async (req, res) => {
+            const paymentSuccess = req.body;
+
+            try {
+                // Validate SSLCommerz payment
+                const { data } = await axios.get(`https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php?val_id=${paymentSuccess.val_id}&store_id=${process.env.SSL_COMMERCE_SECRET_ID}&store_passwd=${process.env.SSL_COMMERCE_SECRET_PASS}&format=json`);
+
+                if (data.status !== "VALID") return res.send({ message: "Invalid Payment" });
+
+                await paymentCollection.updateOne(
+                    { transactionId: data.tran_id },
+                    { $set: { status: "success" } }
+                );
+
+                const payment = await paymentCollection.findOne({ transactionId: data.tran_id });
+
+                // Remove purchased items from cart
+                const query = { _id: { $in: payment.items.map(item => new ObjectId(item.foodId)) } };
+                await addFoodCollection.deleteMany(query);
+
+                // Send confirmation email via EmailJS
+                const templateParams = {
+                    to_email: payment.email,
+                    to_name: payment.customerName,
+                    payment_id: payment.transactionId,
+                    order_date: new Date(payment.date).toLocaleDateString(),
+                    total_amount: payment.foodPrice.toFixed(2),
+                    address: payment.address,
+                    upazila: payment.upazila,
+                    district: payment.district,
+                    division: payment.division,
+                    country: payment.country,
+                    contact_number: payment.contactNumber,
+                    items_html: payment.items.map(item => `
+                        <tr>
+                            <td>${item.foodName}</td>
+                            <td>${item.restaurantName}</td>
+                            <td>${item.quantity}</td>
+                            <td>$${(item.price * item.quantity).toFixed(2)}</td>
+                        </tr>`).join(''),
+                };
+
+                try {
+                    const emailResponse = await emailjs.send(
+                        process.env.EMAILJS_SERVICE_ID,
+                        process.env.EMAILJS_TEMPLATE_ID,
+                        templateParams
+                    );
+                    console.log("Email sent successfully:", emailResponse);
+                } catch (emailError) {
+                    console.error("Failed to send email:", emailError);
+                }
+
+                res.redirect("https://foodhub-d3e1e.web.app/dashboard/paymentHistory?status=success");
+            } catch (error) {
+                console.error("Error in success-payment:", error);
+                res.status(500).send("Internal server error");
+            }
+        });
+
+        app.post('/send-email', async (req, res) => {
+            try {
+                const { to_email, to_name, transaction_id, order_date, total_amount, order_items, customer_address, customer_phone, restaurant_name } = req.body;
+
+                const templateParams = {
+                    to_email,
+                    to_name,
+                    from_name: "FoodHub",
+                    transaction_id,
+                    order_date,
+                    total_amount,
+                    restaurant_name: restaurant_name || "FoodHub Restaurant",
+                    customer_address,
+                    customer_phone,
+                    order_items: Array.isArray(order_items) ? order_items.join('<br>') : order_items
+                };
+
+                const response = await emailjs.send(
+                    process.env.EMAILJS_SERVICE_ID,
+                    process.env.EMAILJS_TEMPLATE_ID,
+                    templateParams
+                );
+
+                console.log("Email sent successfully:", response);
+                res.json({ success: true, message: 'Email sent successfully', data: response });
+            } catch (error) {
+                console.error('Error sending email:', error);
+                res.status(500).json({ success: false, message: 'Failed to send email', error: error.message });
+            }
+        });
+
+        app.get('/payments', async (req, res) => {
+            try {
+                const email = req.query.email;
+                if (!email) {
+                    return res.status(400).json({ error: "Email query parameter is required" });
+                }
+                const payments = await paymentCollection
+                    .find({ email })
+                    .sort({ date: -1 })
+                    .toArray();
+
+                res.json(payments);
+            } catch (err) {
+                console.error("Error fetching payments:", err);
+                res.status(500).json({ error: "Internal server error" });
+            }
+        });
+        // stripe
+        app.post('/create-payment-intent', async (req, res) => {
+            try {
+                const { price } = req.body;
+                if (!price) {
+                    return res.status(400).json({ error: "Price is required" });
+                }
+                const amount = parseInt(price * 100); // 
+                console.log("Creating PaymentIntent with amount:", amount);
+
+                const paymentIntent = await stripe.paymentIntents.create({
+                    amount: amount,
+                    currency: "usd",
+                    payment_method_types: ['card'],
+                });
+
+                console.log("Client Secret Sent:", paymentIntent.client_secret);
+                res.json({ clientSecret: paymentIntent.client_secret });
+
+            } catch (error) {
+                console.error("Payment Intent Error:", error);
+                res.status(500).json({ error: error.message });
+            }
+        });
+
+        app.get("/payments/:email", async (req, res) => {
+            const query = { email: req.params.email }
+            // if (req.params.email !== req.decoded.email) {
+            //   return res.status(403).send({ message: "forbidden access" })
+            // }
+            const result = await paymentCollection.find(query).toArray()
+            res.send(result)
+        })
+
+        app.post("/payments", async (req, res) => {
+            const payment = req.body;
+            const paymentResult = await paymentCollection.insertOne(payment);
+            console.log("stripe payment result", paymentResult);
+            if (payment.status !== "pending") {
+                return res.send({ message: "Invalid Payment" })
+            }
+            const updatePayment = await paymentCollection.updateOne(
+                { transactionId: payment.transactionId },
+                {
+                    $set: {
+                        status: "success"
+                    }
+                }
+            )
+            console.log("updatePayment", updatePayment);
+            const query = {
+                _id: {
+                    $in: payment.items.map(item => new ObjectId(item.foodId))
+                }
+            };
+
+            const deletedResult = await addFoodCollection.deleteMany(query);
+            res.send({ paymentResult, updatePayment, deletedResult });
+        });
+        // payment 
+        app.delete("/payments/:id", async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await paymentCollection.deleteOne(query)
+            res.send(result)
+        })
+        app.get("/payments", async (req, res) => {
+            const result = await paymentCollection.find(query).toArray()
+            res.send(result)
+        });
+
+
+        // addfood cart api 
+        app.get("/addFood", async (req, res) => {
+            const email = req.query.email;
+            const query = { email: email };
+            const result = await addFoodCollection.find(query).toArray()
+            res.send(result);
+        })
+        app.post("/addFood", verifyToken, async (req, res) => {
+            try {
+                const foodInfo = req.body;
+
+
+                if (!foodInfo.foodName || !foodInfo.restaurantName || !foodInfo.email) {
+                    return res.status(400).json({ error: "Missing required fields" });
+                }
+
+
+                foodInfo.createdAt = new Date();
+
+                const result = await addFoodCollection.insertOne(foodInfo);
+
+                if (result.insertedId) {
+                    return res.status(201).json({
+                        success: true,
+                        insertedId: result.insertedId,
+                        message: "Food item added successfully"
+                    });
+                } else {
+                    return res.status(500).json({ error: "Failed to add food item" });
+                }
+            } catch (error) {
+                console.error("Error adding food:", error);
+                return res.status(500).json({ error: "Internal server error" });
+            }
+        });
+        app.get("/addItem", verifyToken, async (req, res) => {
+            try {
+                const { email } = req.query;
+                const items = await addFoodCollection.find({ email }).toArray();
+                res.status(200).json(items);
+            } catch (error) {
+                res.status(500).json({ error: "Failed to fetch cart items" });
+            }
+        });
+        app.patch("/addFood/:id", async (req, res) => {
+            const id = req.params.id;
+            const { quantity } = req.body;
+
+            try {
+                const query = { _id: new ObjectId(id) };
+                const updateDoc = {
+                    $set: { quantity: parseInt(quantity) },
+                };
+
+                const result = await addFoodCollection.updateOne(query, updateDoc);
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ error: "Failed to update quantity" });
+            }
+        });
+
+
+        app.delete("/addFood/:id", verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await addFoodCollection.deleteOne(query);
+            console.log(result);
+            res.send(result)
+        })
+
+        // DistrictAvailable api
+        app.get("/districtAvailable", async (req, res) => {
+            const result = await districtCollection.find().toArray();
+            res.send(result);
+        })
+
+        app.post("/districtAvailable", verifyToken, verifyAdmin, async (req, res) => {
+            const district = req.body;
+            const result = await districtCollection.insertOne(district)
+            res.send(result)
+        })
+
+        // Send a ping to confirm a successful connection
+        await client.db("admin").command({ ping: 1 });
+        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    } finally {
+        // Ensures that the client will close when you finish/error
+
+    }
+}
+run().catch(console.dir);
+
+app.get("/", (req, res) => {
+    res.send("FOODHUB server is running")
+})
+app.listen(port, () => {
+    console.log(`Signnel crud server ${port}`);
+})
