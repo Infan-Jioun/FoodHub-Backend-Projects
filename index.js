@@ -1407,3 +1407,4 @@ if (process.env.NODE_ENV !== 'production') {
         console.log(`FoodHub server is running on port ${port}`);
     });
 }
+module.exports = app;

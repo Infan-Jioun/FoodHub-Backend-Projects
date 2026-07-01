@@ -9,7 +9,7 @@
   },
   "keywords": [],
   "author": "",
-  "type": "module",
+  "type": "commonjs",
   "license": "ISC",
   "description": "",
   "dependencies": {
