@@ -1404,7 +1404,7 @@ app.get("/", (req, res) => {
 // })
 if (process.env.NODE_ENV !== 'production') {
     app.listen(port, () => {
-        console.log(`FoodHub server is running on port ${port}`);
+        console.log(`FoodHub server is running on port  ${port}`);
     });
 }
 module.exports = app;
