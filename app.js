@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 dotenv.config();
 import { connectDB } from "./config/db.js";
 import { getCollections } from "./config/collections.js";
+import { userRouter } from "./modules/user/user.router.js";
+import { verifyToken } from "./middlewares/auth.js";
 
 
 export const app = express();
@@ -31,14 +33,8 @@ async function startServer() {
             wishlistCollection,
         } = getCollections();
 
-        app.use("/users", createUserRouter(usersCollection));
-        app.use("/restaurantUpload", createRestaurantRouter(restaurantUploadCollection));
-        app.use("/addFood", createAddFoodRouter(addFoodCollection));
-        app.use("/payment", createPaymentRouter(paymentCollection));
-        app.use("/district", createDistrictRouter(districtCollection));
-        app.use("/review", createReviewRouter(reviewCollection));
-        app.use("/websiteReview", createWebsiteReviewRouter(websiteReviewCollection));
-        app.use("/wishlist", createWishlistRouter(wishlistCollection));
+        app.use("/users", userRouter(usersCollection));
+        app.use("/restaurantUpload", verifyToken, restaurantRouter(restaurantUploadCollection, addFoodCollection, paymentCollection, districtCollection, reviewCollection, websiteReviewCollection, wishlistCollection));
 
     } catch (error) {
         console.error("Error in server setup:", error.message);
