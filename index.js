@@ -1299,7 +1299,7 @@ async function run() {
             res.send(result)
         })
         app.get("/payments", async (req, res) => {
-            const result = await paymentCollection.find(query).toArray()
+            const result = await paymentCollection.find({}).toArray()
             res.send(result)
         });
 
@@ -1399,9 +1399,9 @@ run().catch(console.dir);
 app.get("/", (req, res) => {
     res.send("FOODHUB server is running")
 })
-app.listen(port, () => {
-    console.log(`Signnel crud server ${port}`);
-})
+// app.listen(port, () => {
+//     console.log(`Signnel crud server ${port}`);
+// })
 if (process.env.NODE_ENV !== 'production') {
     app.listen(port, () => {
         console.log(`FoodHub server is running on port ${port}`);
