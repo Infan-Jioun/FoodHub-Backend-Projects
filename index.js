@@ -1,14 +1,4 @@
-const express = require('express');
-const cors = require('cors');
-const app = express();
-const bodyParser = require('body-parser');
-require("dotenv").config();
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const port = process.env.PORT || 5000;
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-const jwt = require("jsonwebtoken");
-const { default: axios } = require('axios');
-const emailjs = require('emailjs-com');
+
 // MIDDLEWERE
 app.use(express.json())
 app.use(cors({
@@ -21,9 +11,8 @@ app.use(cors({
 app.use(express.urlencoded());
 
 
-const uri = `mongodb+srv://${process.env.DBNAME}:${process.env.DBPASS}@cluster0.lopynog.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
-
+const uri = `mongodb://${process.env.DBNAME}:${process.env.DBPASS}@ac-aix0zlc-shard-00-00.lopynog.mongodb.net:27017,ac-aix0zlc-shard-00-01.lopynog.mongodb.net:27017,ac-aix0zlc-shard-00-02.lopynog.mongodb.net:27017/?ssl=true&replicaSet=atlas-9ouk6h-shard-0&authSource=admin&appName=Cluster0`;
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
@@ -32,19 +21,34 @@ const client = new MongoClient(uri, {
     }
 });
 
+const clientOptions = { serverApi: { version: '1', strict: true, deprecationErrors: true } };
+async function run() {
+    try {
+        // Create a Mongoose client with a MongoClientOptions object to set the Stable API version
+        await mongoose.connect(uri, clientOptions);
+        await mongoose.connection.db.admin().command({ ping: 1 });
+        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    } finally {
+        // Ensures that the client will close when you finish/error
+        await mongoose.disconnect();
+    }
+}
+run().catch(console.dir);
+
+
+// const client = new MongoClient(uri, {
+//     serverApi: {
+//         version: ServerApiVersion.v1,
+//         strict: true,
+//         deprecationErrors: true,
+//     }
+// });
+
 async function run() {
     try {
 
 
-        const usersCollection = client.db("FOODHUB").collection("users");
-        const restaurantUploadCollection = client.db("FOODHUB").collection("restaurantUpload");
-        // const foodsCollection = client.db("FOODHUB").collection("foods");
-        const addFoodCollection = client.db("FOODHUB").collection("addFood");
-        const paymentCollection = client.db("FOODHUB").collection("payment");
-        const districtCollection = client.db("FOODHUB").collection("districtAvailable");
-        const reviewCollection = client.db("FOODHUB").collection("reviewAvailable");
-        const websiteReviewCollection = client.db('FOODHUB').collection('websiteReviews');
-        const wishlistCollection = client.db('FOODHUB').collection('wishlist');
+ 
 
 
         // token create
@@ -1396,14 +1400,10 @@ async function run() {
 }
 run().catch(console.dir);
 
-app.get("/", (req, res) => {
-    res.send("FOODHUB server is running")
-})
-app.listen(port, () => {
-    console.log(`Signnel crud server ${port}`);
-})
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(port, () => {
-        console.log(`FoodHub server is running on port ${port}`);
-    });
-}
+
+
+// if (process.env.NODE_ENV !== 'production') {
+//     app.listen(port, () => {
+//         console.log(`FoodHub server is running on port ${port}`);
+//     });
+// }
