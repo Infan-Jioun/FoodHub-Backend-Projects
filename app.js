@@ -22,16 +22,7 @@ app.use(express.urlencoded({ extended: true }))
 async function startServer() {
     try {
         await connectDB();
-        // const {
-        //     usersCollection,
-        //     restaurantUploadCollection,
-        //     addFoodCollection,
-        //     paymentCollection,
-        //     districtCollection,
-        //     reviewCollection,
-        //     websiteReviewCollection,
-        //     wishlistCollection,
-        // } = getCollections();
+
 
         app.use("/users", userRouter);
         // app.use("/restaurantUpload", verifyToken, restaurantRouter(restaurantUploadCollection, addFoodCollection, paymentCollection, districtCollection, reviewCollection, websiteReviewCollection, wishlistCollection));
@@ -46,6 +37,10 @@ app.get("/", (req, res) => {
     res.send("FOODHUB server is running");
 });
 app.use((error, req, res, next) => {
+    const statusCode = error.statusCode || 500;
     console.error(error.message);
-    res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
+    res.status(statusCode).json({
+        success: false,
+        message: error.message || "Internal Server Error",
+    });
 });
