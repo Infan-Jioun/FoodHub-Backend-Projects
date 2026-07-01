@@ -6,6 +6,7 @@ import { getCollections } from "./config/collections.js";
 import { userRouter } from "./modules/user/user.router.js";
 import { verifyToken } from "./middlewares/auth.js";
 import { connectDB } from "./config/db.js";
+import { restaurantRouter } from "./modules/restaurant/restaurant.router.js";
 
 
 export const app = express();
@@ -25,7 +26,7 @@ async function startServer() {
 
 
         app.use("/users", userRouter);
-        // app.use("/restaurantUpload", verifyToken, restaurantRouter(restaurantUploadCollection, addFoodCollection, paymentCollection, districtCollection, reviewCollection, websiteReviewCollection, wishlistCollection));
+        app.use("/restaurant", restaurantRouter);
 
     } catch (error) {
         console.error("Error in server setup:", error.message);
