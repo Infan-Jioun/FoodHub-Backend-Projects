@@ -15,8 +15,12 @@ const addReview = catchAsync(async (req, res) => {
     const result = await websiteReviewService.addReview(req.body);
     ok(res, "Review submitted successfully", result, status.CREATED);
 });
-
+const getReviewByEmail = catchAsync(async (req, res) => {
+    const result = await websiteReviewService.getReviewByEmail(req.query.email);
+    ok(res, "Review retrieved successfully", result);
+});
 export const websiteReviewController = {
     getAllReviews,
     addReview,
+    getReviewByEmail,
 };

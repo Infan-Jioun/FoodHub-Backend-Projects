@@ -247,7 +247,35 @@ const getFoodReviewsByQuery = async (restaurantName, foodName) => {
     const foodItem = restaurant.foods.find((f) => f.foodName === foodName);
     return { reviews: foodItem.reviews || [] };
 };
+const getRestaurantByEmail = async (email) => {
+    const { restaurantUploadCollection } = getCollections();
 
+    if (!email) {
+        throw new AppError(status.BAD_REQUEST, "Email is required");
+    }
+
+    const restaurant = await restaurantUploadCollection.findOne({ email });
+
+    if (!restaurant) {
+        throw new AppError(status.NOT_FOUND, "Restaurant not found for this email");
+    }
+
+    return restaurant;
+};
+const deleteFoodFromRestaurant = async (restaurantName, foodName) => {
+    const { restaurantUploadCollection } = getCollections();
+
+    const filter = { restaurantName };
+    const update = { $pull: { foods: { foodName } } };
+
+    const result = await restaurantUploadCollection.updateOne(filter, update);
+
+    if (result.modifiedCount === 0) {
+        throw new AppError(status.NOT_FOUND, "Food item not found");
+    }
+
+    return result;
+};
 export const restaurantService = {
     getAllRestaurants,
     checkRestaurantExists,
@@ -263,4 +291,6 @@ export const restaurantService = {
     getFoodReviewsByPath,
     addReplyToReview,
     getFoodReviewsByQuery,
+    getRestaurantByEmail,
+    deleteFoodFromRestaurant
 };

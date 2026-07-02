@@ -81,7 +81,15 @@ const getFoodReviewsByQuery = catchAsync(async (req, res) => {
     const result = await restaurantService.getFoodReviewsByQuery(restaurantName, foodName);
     ok(res, "Food reviews retrieved successfully", result);
 });
-
+const getRestaurantByEmail = catchAsync(async (req, res) => {
+    const result = await restaurantService.getRestaurantByEmail(req.params.email);
+    ok(res, "Restaurant retrieved successfully", result);
+});
+const deleteFoodFromRestaurant = catchAsync(async (req, res) => {
+    const { restaurantName, foodName } = req.params;
+    const result = await restaurantService.deleteFoodFromRestaurant(restaurantName, foodName);
+    ok(res, "Food item deleted successfully", result);
+});
 export const restaurantController = {
     getAllRestaurants,
     createRestaurant,
@@ -96,4 +104,6 @@ export const restaurantController = {
     getFoodReviewsByPath,
     addReplyToReview,
     getFoodReviewsByQuery,
+    getRestaurantByEmail,
+    deleteFoodFromRestaurant
 };

@@ -21,7 +21,7 @@ router.post("/", verifyToken, paymentController.createPayment);
 
 // Read / delete
 router.get("/email/:email", verifyToken, paymentController.getPaymentsByEmail);
-router.get("/", verifyToken, verifyAdmin, paymentController.getAllPayments);
+router.get("/", verifyToken, paymentController.getAllPayments);
 router.delete("/:id", verifyToken, verifyAdmin, paymentController.deletePayment);
 
 export const paymentRouter = router;

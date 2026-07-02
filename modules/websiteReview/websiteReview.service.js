@@ -4,7 +4,7 @@ import status from "http-status";
 
 const getAllReviews = async () => {
     const { websiteReviewCollection } = getCollections();
-    return await websiteReviewCollection.find({}).sort({ date: -1 }).toArray();
+    return await websiteReviewCollection.find({}).sort({ date: -1 }).toArray();  direct
 };
 
 const addReview = async (reviewData) => {
@@ -32,7 +32,16 @@ const addReview = async (reviewData) => {
     return { reviewId: result.insertedId };
 };
 
+const getReviewByEmail = async (email) => {
+    if (!email) {
+        throw new AppError(status.BAD_REQUEST, "Email is required");
+    }
+    const { websiteReviewCollection } = getCollections();
+    const review = await websiteReviewCollection.findOne({ email });
+    return { review: review || null };
+};
 export const websiteReviewService = {
     getAllReviews,
     addReview,
+    getReviewByEmail
 };

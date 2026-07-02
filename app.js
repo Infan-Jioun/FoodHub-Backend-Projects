@@ -12,6 +12,8 @@ import { revenueRouter } from "./modules/revenue/revenue.router.js";
 import { paymentRouter } from "./modules/payment/payment.router.js";
 import { districtRouter } from "./modules/district/district.router.js";
 import { wishlistRouter } from "./modules/wishlist/wishlist.router.js";
+import { websiteReviewRouter } from "./modules/websiteReview/websiteReview.router.js";
+import { authRouter } from "./modules/auth/auth.router.js";
 
 
 export const app = express();
@@ -29,7 +31,7 @@ async function startServer() {
     try {
         await connectDB();
 
-
+        app.use("/", authRouter);
         app.use("/users", userRouter);
         app.use("/districts", districtRouter);
         app.use("/restaurant", restaurantRouter);

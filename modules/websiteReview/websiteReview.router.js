@@ -6,5 +6,5 @@ const router = express.Router();
 
 router.get("/", websiteReviewController.getAllReviews);
 router.post("/", verifyToken, websiteReviewController.addReview);
-
+router.get("/mine", verifyToken, websiteReviewController.getReviewByEmail)
 export const websiteReviewRouter = router;
