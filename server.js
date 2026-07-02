@@ -4,6 +4,10 @@ dotenv.config();
 
 const port = process.env.PORT || 5000;
 
-app.listen(port, () => {
-    console.log(`FoodHub server running on port ${port}`);
-});
+if (process.env.NODE_ENV !== "production") {
+    app.listen(port, () => {
+        console.log(`FoodHub server running on port ${port}`);
+    });
+}
+
+export default app; 
