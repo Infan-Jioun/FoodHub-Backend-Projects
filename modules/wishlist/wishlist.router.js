@@ -1,10 +1,11 @@
 import express from "express";
-import { websiteReviewController } from "./websiteReview.controller.js";
+import { wishlistController } from "./wishlist.controller.js";
 import { verifyToken } from "../../middlewares/auth.js";
 
 const router = express.Router();
 
-router.get("/", websiteReviewController.getAllReviews);
-router.post("/", verifyToken, websiteReviewController.addReview);
+router.get("/", verifyToken, wishlistController.getWishlistByEmail);
+router.post("/", verifyToken, wishlistController.addToWishlist);
+router.delete("/:foodId", verifyToken, wishlistController.removeFromWishlist);
 
-export const websiteReviewRouter = router;
+export const wishlistRouter = router;

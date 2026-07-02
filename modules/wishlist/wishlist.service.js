@@ -2,37 +2,50 @@ import { getCollections } from "../../config/collections.js";
 import { AppError } from "../../_shared/AppError.js";
 import status from "http-status";
 
-const getAllReviews = async () => {
-    const { websiteReviewCollection } = getCollections();
-    return await websiteReviewCollection.find({}).sort({ date: -1 }).toArray();
+const getWishlistByEmail = async (email) => {
+    if (!email) {
+        throw new AppError(status.BAD_REQUEST, "Email is required");
+    }
+    const { wishlistCollection } = getCollections();
+    return await wishlistCollection.find({ email }).toArray();
 };
 
-const addReview = async (reviewData) => {
-    const { websiteReviewCollection } = getCollections();
-    const { email, name, photoURL, rating, comment, date } = reviewData;
+const addToWishlist = async (wishlistItem) => {
+    const { wishlistCollection } = getCollections();
 
-    if (!email || !rating || !comment) {
-        throw new AppError(status.BAD_REQUEST, "email, rating and comment are required");
+    if (!wishlistItem?.foodId || !wishlistItem?.email) {
+        throw new AppError(status.BAD_REQUEST, "foodId and email are required");
     }
 
-    const existing = await websiteReviewCollection.findOne({ email });
-    if (existing) {
-        throw new AppError(status.BAD_REQUEST, "You have already reviewed");
-    }
-
-    const result = await websiteReviewCollection.insertOne({
-        email,
-        name,
-        photoURL,
-        rating,
-        comment,
-        date: date || new Date(),
+    const existing = await wishlistCollection.findOne({
+        foodId: wishlistItem.foodId,
+        email: wishlistItem.email,
     });
 
-    return { reviewId: result.insertedId };
+    if (existing) {
+        throw new AppError(status.BAD_REQUEST, "Item already in wishlist");
+    }
+
+    return await wishlistCollection.insertOne(wishlistItem);
 };
 
-export const websiteReviewService = {
-    getAllReviews,
-    addReview,
+const removeFromWishlist = async (foodId, email) => {
+    if (!foodId || !email) {
+        throw new AppError(status.BAD_REQUEST, "foodId and email are required");
+    }
+
+    const { wishlistCollection } = getCollections();
+    const result = await wishlistCollection.deleteOne({ foodId, email });
+
+    if (result.deletedCount === 0) {
+        throw new AppError(status.NOT_FOUND, "Wishlist item not found");
+    }
+
+    return result;
+};
+
+export const wishlistService = {
+    getWishlistByEmail,
+    addToWishlist,
+    removeFromWishlist,
 };
