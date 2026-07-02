@@ -37,7 +37,14 @@ async function startServer() {
 startServer();
 
 app.get("/", (req, res) => {
-    res.send("FOODHUB server is running");
+    res.send({
+        success: true,
+        message: "FOODHUB server is running",
+        status: "healthy",
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || "development"
+    });
 });
 app.use((error, req, res, next) => {
     const statusCode = error.statusCode || 500;

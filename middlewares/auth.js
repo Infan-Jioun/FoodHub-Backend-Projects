@@ -1,61 +1,51 @@
 import jwt from "jsonwebtoken";
 import { getCollections } from "../config/collections.js";
+import { AppError } from "../_shared/AppError.js";
+import status from "http-status";
 
 export const verifyToken = (req, res, next) => {
     if (!req.headers.authorization) {
-        return res.status(401).send({ message: "Unauthorized access" });
+        return next(new AppError(status.UNAUTHORIZED, "Unauthorized access"));
     }
+
     const token = req.headers.authorization.split(" ")[1];
+
+    if (!token) {
+        return next(new AppError(status.UNAUTHORIZED, "Unauthorized access"));
+    }
+
     jwt.verify(token, process.env.JWT_WEB_TOKEN, (err, decoded) => {
         if (err) {
-            return res.status(403).send({ message: "forbidden access" });
+            return next(new AppError(status.FORBIDDEN, "forbidden access"));
         }
         req.decoded = decoded;
         next();
     });
 };
 
-export const verifyAdmin = async (req, res, next) => {
-    const { usersCollection } = getCollections();
-    const email = req.decoded.email;
-    const user = await usersCollection.findOne({ email });
-    const isAdmin = user?.role === "admin";
-    if (!isAdmin) {
-        return res.status(403).send({ message: "forbidden access" });
-    }
-    next();
-};
 
-export const verifyModerator = async (req, res, next) => {
-    const { usersCollection } = getCollections();
-    const email = req.decoded.email;
-    const user = await usersCollection.findOne({ email });
-    const isModerator = user?.role === "moderator";
-    if (!isModerator) {
-        return res.status(403).send({ message: "forbidden access" });
-    }
-    next();
-};
-
-export const verifyOwner = async (req, res, next) => {
-    const { usersCollection } = getCollections();
-    const email = req.decoded.email;
-    const user = await usersCollection.findOne({ email });
-    const isOwner = user?.role === "owner";
-    if (!isOwner) {
-        return res.status(403).send({ message: "forbidden access" });
-    }
-    next();
-};
-
-export const verifyRole = (role) => {
+export const verifyRole = (...allowedRoles) => {
     return async (req, res, next) => {
-        const { usersCollection } = getCollections();
-        const email = req.decoded.email;
-        const user = await usersCollection.findOne({ email });
-        if (!user || user.role !== role) {
-            return res.status(403).send({ message: "forbidden access" });
+        try {
+            if (!req.decoded?.email) {
+                return next(new AppError(status.UNAUTHORIZED, "Unauthorized access"));
+            }
+
+            const { usersCollection } = getCollections();
+            const user = await usersCollection.findOne({ email: req.decoded.email });
+
+            if (!user || !allowedRoles.includes(user.role)) {
+                return next(new AppError(status.FORBIDDEN, "forbidden access"));
+            }
+
+            req.user = user; 
+            next();
+        } catch (error) {
+            next(error);
         }
-        next();
     };
 };
+
+export const verifyAdmin = verifyRole("admin");
+export const verifyModerator = verifyRole("moderator");
+export const verifyOwner = verifyRole("owner");
