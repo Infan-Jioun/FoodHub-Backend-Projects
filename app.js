@@ -35,6 +35,7 @@ async function startServer() {
         app.use("/cart", cartRouter);
         app.use("/payments", paymentRouter);
         app.use("/revenue", revenueRouter);
+        app.use("/website-reviews", websiteReviewRouter);
 
 
     } catch (error) {
