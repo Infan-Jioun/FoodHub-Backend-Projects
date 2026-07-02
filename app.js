@@ -10,6 +10,7 @@ import { restaurantRouter } from "./modules/restaurant/restaurant.router.js";
 import { cartRouter } from "./modules/cart/cart.router.js";
 import { revenueRouter } from "./modules/revenue/revenue.router.js";
 import { paymentRouter } from "./modules/payment/payment.router.js";
+import { districtRouter } from "./modules/district/district.router.js";
 
 
 export const app = express();
@@ -29,10 +30,12 @@ async function startServer() {
 
 
         app.use("/users", userRouter);
+        app.use("/districts", districtRouter);
         app.use("/restaurant", restaurantRouter);
         app.use("/cart", cartRouter);
         app.use("/payments", paymentRouter);
         app.use("/revenue", revenueRouter);
+
 
     } catch (error) {
         console.error("Error in server setup:", error.message);
