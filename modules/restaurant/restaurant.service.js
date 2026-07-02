@@ -306,11 +306,7 @@ const updateFoodInRestaurant = async (restaurantName, foodName, updateData) => {
 
     return result;
 };
-const updateFoodInRestaurant = catchAsync(async (req, res) => {
-    const { restaurantName, foodName } = req.params;
-    const result = await restaurantService.updateFoodInRestaurant(restaurantName, foodName, req.body);
-    ok(res, "Food item updated successfully", result);
-});
+
 export const restaurantService = {
     getAllRestaurants,
     checkRestaurantExists,

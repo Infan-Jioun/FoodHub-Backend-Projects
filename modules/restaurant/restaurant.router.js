@@ -23,4 +23,5 @@ router.patch("/:restaurantName/:foodName/review", restaurantController.addFoodRe
 router.get("/:restaurantName/:foodName/reviews", restaurantController.getFoodReviewsByPath);
 router.get("/by-email/:email", restaurantController.getRestaurantByEmail);
 router.delete("/:restaurantName/food/:foodName", verifyToken, restaurantController.deleteFoodFromRestaurant);
+router.put("/:restaurantName/food/:foodName", verifyToken, restaurantController.updateFoodInRestaurant);
 export const restaurantRouter = router;
