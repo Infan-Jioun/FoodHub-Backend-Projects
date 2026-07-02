@@ -90,6 +90,11 @@ const deleteFoodFromRestaurant = catchAsync(async (req, res) => {
     const result = await restaurantService.deleteFoodFromRestaurant(restaurantName, foodName);
     ok(res, "Food item deleted successfully", result);
 });
+const updateFoodInRestaurant = catchAsync(async (req, res) => {
+    const { restaurantName, foodName } = req.params;
+    const result = await restaurantService.updateFoodInRestaurant(restaurantName, foodName, req.body);
+    ok(res, "Food item updated successfully", result);
+});
 export const restaurantController = {
     getAllRestaurants,
     createRestaurant,
@@ -105,5 +110,6 @@ export const restaurantController = {
     addReplyToReview,
     getFoodReviewsByQuery,
     getRestaurantByEmail,
-    deleteFoodFromRestaurant
+    deleteFoodFromRestaurant,
+    updateFoodInRestaurant
 };

@@ -276,6 +276,41 @@ const deleteFoodFromRestaurant = async (restaurantName, foodName) => {
 
     return result;
 };
+const updateFoodInRestaurant = async (restaurantName, foodName, updateData) => {
+    const { restaurantUploadCollection } = getCollections();
+
+    if (!updateData?.foodName) {
+        throw new AppError(status.BAD_REQUEST, "foodName is required");
+    }
+
+    const result = await restaurantUploadCollection.updateOne(
+        {
+            restaurantName,
+            "foods.foodName": foodName,
+        },
+        {
+            $set: {
+                "foods.$.foodName": updateData.foodName,
+                "foods.$.foodImage": updateData.foodImage,
+                "foods.$.category": updateData.category,
+                "foods.$.price": updateData.price,
+                "foods.$.description": updateData.description || "",
+                "foods.$.updatedAt": new Date(),
+            },
+        }
+    );
+
+    if (result.matchedCount === 0) {
+        throw new AppError(status.NOT_FOUND, "Food item not found");
+    }
+
+    return result;
+};
+const updateFoodInRestaurant = catchAsync(async (req, res) => {
+    const { restaurantName, foodName } = req.params;
+    const result = await restaurantService.updateFoodInRestaurant(restaurantName, foodName, req.body);
+    ok(res, "Food item updated successfully", result);
+});
 export const restaurantService = {
     getAllRestaurants,
     checkRestaurantExists,
@@ -292,5 +327,6 @@ export const restaurantService = {
     addReplyToReview,
     getFoodReviewsByQuery,
     getRestaurantByEmail,
-    deleteFoodFromRestaurant
+    deleteFoodFromRestaurant,
+    updateFoodInRestaurant,
 };
