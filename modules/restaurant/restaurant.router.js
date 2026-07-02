@@ -5,23 +5,23 @@ import { verifyOwner, verifyToken, } from "../../middlewares/auth.js";
 const router = express.Router();
 
 router.get("/", restaurantController.getAllRestaurants);
-router.post("/", restaurantController.createRestaurant);
+router.post("/", verifyToken, verifyOwner, restaurantController.createRestaurant);
 
 router.get("/district/:districtName", restaurantController.getRestaurantsByDistrict);
 router.get("/food-reviews", restaurantController.getFoodReviewsByQuery);
-router.patch("/reply", restaurantController.addReplyToReview);
+router.patch("/reply", verifyToken, verifyOwner, restaurantController.addReplyToReview);
 
 router.get("/:restaurantName", restaurantController.getRestaurantByName);
-router.delete("/:restaurantName", restaurantController.deleteRestaurant);
+router.delete("/:restaurantName", verifyToken, verifyOwner, restaurantController.deleteRestaurant);
 
-router.patch("/:restaurantName/food", restaurantController.addFoodToRestaurant);
-router.patch("/:restaurantName/review", restaurantController.addRestaurantReview);
+router.patch("/:restaurantName/food", verifyToken, verifyOwner, restaurantController.addFoodToRestaurant);
+router.patch("/:restaurantName/review", verifyToken, verifyOwner, restaurantController.addRestaurantReview);
 router.get("/:restaurantName/review/check", restaurantController.checkRestaurantReviewed);
 router.get("/:restaurantName/review", restaurantController.getRestaurantReviews);
 
-router.patch("/:restaurantName/:foodName/review", restaurantController.addFoodReview);
+router.patch("/:restaurantName/:foodName/review", verifyToken, verifyOwner, restaurantController.addFoodReview);
 router.get("/:restaurantName/:foodName/reviews", restaurantController.getFoodReviewsByPath);
-router.get("/by-email/:email", restaurantController.getRestaurantByEmail);
-router.delete("/:restaurantName/food/:foodName", verifyToken, restaurantController.deleteFoodFromRestaurant);
-router.put("/:restaurantName/food/:foodName", verifyToken, restaurantController.updateFoodInRestaurant);
+router.get("/by-email/:email", verifyToken, verifyOwner, restaurantController.getRestaurantByEmail);
+router.delete("/:restaurantName/food/:foodName", verifyToken, verifyOwner, restaurantController.deleteFoodFromRestaurant);
+router.put("/:restaurantName/food/:foodName", verifyToken, verifyOwner, restaurantController.updateFoodInRestaurant);
 export const restaurantRouter = router;

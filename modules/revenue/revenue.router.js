@@ -9,4 +9,4 @@ router.get("/by-month", verifyToken, revenueController.getRevenueByMonth);
 router.get("/daily", verifyToken, revenueController.getDailyRevenue);
 router.get("/top-items", verifyToken, revenueController.getTopItems);
 
-export const revenueRouter = router;
+export const revenueRouter = router;               

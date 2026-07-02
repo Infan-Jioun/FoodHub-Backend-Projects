@@ -4,7 +4,7 @@ import { verifyToken, verifyAdmin, verifyModerator, verifyOwner, verifyRole } fr
 
 const router = express.Router();
 
-router.get("/",  userController.getAllUsers);
+router.get("/", verifyToken, verifyAdmin, userController.getAllUsers);
 router.get("/check-name", userController.checkUserName);
 router.put("/", userController.upsertUser);
 router.delete("/:id", verifyToken, userController.deleteUser);

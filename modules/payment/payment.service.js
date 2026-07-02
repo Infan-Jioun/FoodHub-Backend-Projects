@@ -283,7 +283,39 @@ const deletePayment = async (id) => {
     }
     return result;
 };
+const getRestaurantPaymentsWithTotals = async (email) => {
+    const { restaurantUploadCollection, paymentCollection } = getCollections();
 
+    const restaurant = await restaurantUploadCollection.findOne({ email });
+    if (!restaurant) {
+        throw new AppError(status.NOT_FOUND, "Restaurant not found for this owner");
+    }
+
+    const payments = await paymentCollection.find({
+        "items.restaurantName": restaurant.restaurantName,
+        status: "success",
+    }).sort({ date: -1 }).toArray();
+
+    const totals = payments.reduce((acc, payment) => {
+        const restaurantItems = payment.items.filter(
+            (item) => item.restaurantName === restaurant.restaurantName
+        );
+        const paymentTotal = restaurantItems.reduce(
+            (sum, item) => sum + parseAmount(item.price) * (parseInt(item.quantity) || 1),
+            0
+        );
+        const commission = paymentTotal * 0.05;
+        const earnings = paymentTotal - commission;
+
+        return {
+            totalSales: acc.totalSales + paymentTotal,
+            totalCommission: acc.totalCommission + commission,
+            totalEarnings: acc.totalEarnings + earnings,
+        };
+    }, { totalSales: 0, totalCommission: 0, totalEarnings: 0 });
+
+    return { data: payments, totals };
+};
 export const paymentService = {
     getRestaurantRevenue,
     getOrdersByRestaurant,
@@ -295,4 +327,5 @@ export const paymentService = {
     getPaymentsByEmail,
     getAllPayments,
     deletePayment,
+    getRestaurantPaymentsWithTotals
 };

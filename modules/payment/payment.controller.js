@@ -46,17 +46,18 @@ const getPaymentsByEmail = catchAsync(async (req, res) => {
     const result = await paymentService.getPaymentsByEmail(email);
     ok(res, "Payments retrieved successfully", result);
 });
-
 const getAllPayments = catchAsync(async (req, res) => {
     const result = await paymentService.getAllPayments();
     ok(res, "All payments retrieved successfully", result);
 });
-
 const deletePayment = catchAsync(async (req, res) => {
     const result = await paymentService.deletePayment(req.params.id);
     ok(res, "Payment deleted successfully", result);
 });
-
+const getRestaurantPaymentsWithTotals = catchAsync(async (req, res) => {
+    const result = await paymentService.getRestaurantPaymentsWithTotals(req.params.email);
+    ok(res, "Restaurant payments retrieved successfully", result);
+});
 export const paymentController = {
     getRestaurantRevenue,
     getOrdersByRestaurant,
@@ -68,4 +69,5 @@ export const paymentController = {
     getPaymentsByEmail,
     getAllPayments,
     deletePayment,
+    getRestaurantPaymentsWithTotals
 };
