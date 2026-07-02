@@ -557,7 +557,7 @@ async function run() {
                 });
             }
         });
-
+// *Payment
         app.get('/restaurantRevenue/:email', verifyToken, verifyOwner, async (req, res) => {
             try {
                 const email = req.params.email;
@@ -673,6 +673,9 @@ async function run() {
                 res.status(500).json({ message: 'Internal Server Error' });
             }
         });
+
+
+        ///* Website Reviews Routes
         app.get('/website-reviews', async (req, res) => {
             try {
                 const reviews = await websiteReviewCollection.find({}).sort({ date: -1 }).toArray();
@@ -1067,7 +1070,7 @@ async function run() {
                 res.status(500).send({ message: error.message });
             }
         });
-
+// * Payment 
         // SSL Commerce Payment Intent
         app.post("/create-ssl-payment", async (req, res) => {
 
