@@ -1,4 +1,4 @@
-# 🍽️ FoodHub Backend – RESTful API for Food Delivery App
+# 🍽️ FoodHub Backend – RESTful API for Food Delivery App.
 
 The FoodHub Backend is a secure, modular REST API built with **Node.js**, **Express**, and **MongoDB**, powering all core functionality of the FoodHub food delivery platform.
 
